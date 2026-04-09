@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Data files (large / sensitive)
+Training Datasets/
+Test/
+uploads/
+outputs/
+output_classified*.csv
+*.csv
+
+# Secrets
+.env
+*.env
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp

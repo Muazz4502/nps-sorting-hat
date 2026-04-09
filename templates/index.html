@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Sorting Hat — NPS Classifier</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=IM+Fell+English:ital@0;1&family=Inter:wght@300;400;500;600&display=swap');
+
+    :root {
+      --gold: #c9a84c;
+      --gold-light: #e8c96a;
+      --gold-dim: rgba(201,168,76,0.15);
+      --purple: #4a2070;
+      --bg: #06050d;
+      --surface: rgba(255,255,255,0.035);
+      --border: rgba(201,168,76,0.18);
+      --text: #ede8d8;
+      --muted: #7a7060;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Magical background ── */
+    .starfield {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(74,32,112,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(40,20,80,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 90%, rgba(100,60,20,0.12) 0%, transparent 50%);
+    }
+
+    /* Floating sparkles */
+    .sparkle {
+      position: fixed; pointer-events: none; z-index: 0;
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--gold-light);
+      box-shadow: 0 0 4px 1px rgba(201,168,76,0.6);
+      animation: floatSparkle linear infinite;
+      opacity: 0;
+    }
+    @keyframes floatSparkle {
+      0%   { transform: translateY(0) scale(0);   opacity: 0; }
+      10%  { opacity: 1; transform: translateY(-10px) scale(1); }
+      80%  { opacity: 0.6; }
+      100% { transform: translateY(-120px) scale(0); opacity: 0; }
+    }
+
+    /* Twinkle stars */
+    .star {
+      position: fixed; pointer-events: none; z-index: 0;
+      background: white; border-radius: 50%;
+      animation: twinkle ease-in-out infinite;
+    }
+    @keyframes twinkle {
+      0%,100% { opacity: 0.1; transform: scale(1); }
+      50%     { opacity: 0.7; transform: scale(1.4); }
+    }
+
+    /* ── Layout ── */
+    .z1 { position: relative; z-index: 1; }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 14px 36px;
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(6,5,13,0.85);
+      backdrop-filter: blur(20px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .site-title {
+      font-family: 'Cinzel', serif; font-size: 17px; font-weight: 700;
+      background: linear-gradient(135deg, #f0d870, #c9a84c, #8a6020);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      letter-spacing: 0.05em;
+    }
+    .site-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+    .model-badge {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+      font-size: 12px; padding: 5px 14px; border-radius: 99px;
+      border: 1px solid var(--border); background: var(--gold-dim);
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px; padding: 32px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .card-title {
+      font-family: 'Cinzel', serif; font-size: 15px;
+      color: var(--gold-light); letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+
+    /* ── House banners decoration ── */
+    .house-bar {
+      height: 3px; border-radius: 99px;
+      background: linear-gradient(90deg, #740001, #ae0001, #eeba30, #eeba30, #1a472a, #2a623d, #0e1a40, #222f5b);
+      opacity: 0.5; margin-bottom: 28px;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed rgba(201,168,76,0.3); border-radius: 14px;
+      padding: 48px 32px; text-align: center; cursor: pointer;
+      transition: all 0.25s ease; position: relative; overflow: hidden;
+    }
+    .drop-zone::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, rgba(201,168,76,0.05) 0%, transparent 70%);
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: rgba(201,168,76,0.65); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 24px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s ease; border: none; font-family: 'Inter', sans-serif;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-gold {
+      background: linear-gradient(135deg, #a07020, #c9a84c, #e8c96a);
+      color: #1a0e00;
+      box-shadow: 0 4px 18px rgba(201,168,76,0.25);
+    }
+    .btn-gold:hover:not(:disabled) {
+      box-shadow: 0 6px 28px rgba(201,168,76,0.45); transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,0.05); color: var(--text);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.09); }
+    .btn-green {
+      background: linear-gradient(135deg, #0d6b3c, #15a05a);
+      color: #e8f5ee; text-decoration: none;
+      box-shadow: 0 4px 18px rgba(21,160,90,0.2);
+    }
+    .btn-green:hover { box-shadow: 0 6px 28px rgba(21,160,90,0.38); transform: translateY(-1px); }
+
+    /* ── Steps ── */
+    .steps { display: flex; align-items: center; margin-bottom: 28px; }
+    .step-num {
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+      font-family: 'Cinzel', serif; transition: all 0.3s;
+      border: 1.5px solid rgba(201,168,76,0.25); color: var(--muted);
+    }
+    .step-num.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); box-shadow: 0 0 16px rgba(201,168,76,0.2); }
+    .step-num.done   { border-color: #15a05a; color: #15a05a; background: rgba(21,160,90,0.12); }
+    .step-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; transition: color 0.3s; }
+    .step-label.active { color: var(--gold-light); }
+    .step-line { flex: 1; height: 1px; background: rgba(201,168,76,0.1); margin: 0 10px; }
+
+    /* ── Progress ── */
+    .progress-track { height: 6px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, #7c3aed, #c9a84c);
+      transition: width 0.5s ease;
+    }
+
+    /* ── Form elements ── */
+    select, textarea {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(201,168,76,0.2);
+      color: var(--text); border-radius: 10px; padding: 10px 14px;
+      width: 100%; outline: none; font-family: 'Inter', sans-serif;
+      font-size: 13px; transition: border-color 0.2s;
+    }
+    select:focus, textarea:focus { border-color: rgba(201,168,76,0.5); }
+    select option { background: #12101f; color: var(--text); }
+    textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+    textarea::placeholder { color: var(--muted); }
+    .field-label {
+      display: block; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 7px;
+    }
+
+    /* ── Stat cards ── */
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px;
+    }
+    .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+    .stat-value { font-family: 'Cinzel', serif; font-size: 26px; font-weight: 700; line-height: 1; }
+
+    /* ── Category bars ── */
+    .cat-bar { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+    .cat-name { font-size: 11px; color: #c4bba8; width: 185px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cat-track { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+    .cat-fill  { height: 100%; border-radius: 99px; transition: width 0.7s ease; }
+    .cat-count { font-size: 11px; color: var(--muted); width: 32px; text-align: right; }
+
+    /* ── AI panel ── */
+    .ai-card {
+      background: linear-gradient(135deg, rgba(74,32,112,0.2), rgba(107,47,160,0.08));
+      border: 1px solid rgba(107,47,160,0.35); border-radius: 14px; padding: 22px;
+    }
+    .ai-title { font-family: 'Cinzel', serif; font-size: 13px; color: #c4a0f0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .ai-body  { font-size: 13px; color: #c8bedd; line-height: 1.8; white-space: pre-wrap; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid rgba(201,168,76,0.2); border-top-color: var(--gold);
+      animation: spin 0.75s linear infinite; flex-shrink: 0;
+    }
+    .spinner-purple { border-color: rgba(107,47,160,0.2); border-top-color: #c4a0f0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Misc ── */
+    .hidden { display: none !important; }
+    .fade-in { animation: fadeIn 0.35s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+    .section-tag {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .tag-actionable { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc; }
+    .tag-sentiment  { background: rgba(21,160,90,0.1);  border: 1px solid rgba(21,160,90,0.3);  color: #6ee7b7; }
+    .tag-noise      { background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3); color: var(--gold-light); }
+    .error-box { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #fca5a5; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.15); border-radius: 99px; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .preview-table th { padding: 8px 12px; text-align: left; color: var(--muted); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .preview-table td { padding: 8px 12px; color: #c4bba8; border-bottom: 1px solid rgba(255,255,255,0.04); max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preview-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px; }
+
+    /* ── Mode selector ── */
+    .mode-btn {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 20px 14px;
+      cursor: pointer; transition: all 0.2s ease;
+      color: var(--text); text-align: center;
+      font-family: 'Inter', sans-serif;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: 100%;
+    }
+    .mode-btn:hover { border-color: rgba(201,168,76,0.45); background: rgba(255,255,255,0.05); }
+    .mode-btn.selected { border-color: var(--gold); background: var(--gold-dim); box-shadow: 0 0 20px rgba(201,168,76,0.12); }
+    .mode-name { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 600; color: var(--gold-light); }
+    .mode-sub  { font-size: 11px; color: var(--muted); }
+
+    /* ── Snitch ── */
+    .snitch { animation: snitchFloat 6s ease-in-out infinite; }
+    @keyframes snitchFloat {
+      0%,100% { transform: translate(0,0) rotate(-5deg); }
+      25%     { transform: translate(8px,-10px) rotate(5deg); }
+      50%     { transform: translate(14px, 2px) rotate(-3deg); }
+      75%     { transform: translate(4px,-6px) rotate(4deg); }
+    }
+
+    /* ── Lightning bolt ── */
+    .bolt { animation: boltPulse 3s ease-in-out infinite; }
+    @keyframes boltPulse {
+      0%,100% { opacity: 0.4; filter: drop-shadow(0 0 4px rgba(201,168,76,0.3)); }
+      50%     { opacity: 0.9; filter: drop-shadow(0 0 10px rgba(201,168,76,0.8)); }
+    }
+
+    /* Hat bob on processing screen */
+    .hat-bob { animation: hatBob 1.8s ease-in-out infinite; }
+    @keyframes hatBob {
+      0%,100% { transform: translateY(0) rotate(-3deg); }
+      50%     { transform: translateY(-12px) rotate(3deg); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Starfield -->
+<div class="starfield" id="starfield"></div>
+
+<!-- Sparkle container -->
+<div id="sparkles"></div>
+
+<!-- Header -->
+<header>
+  <img src="/static/sorting_hat.png" alt="Sorting Hat" style="height:48px;width:auto;filter:drop-shadow(0 0 8px rgba(201,168,76,0.5));flex-shrink:0;">
+  <div>
+    <div class="site-title">The Sorting Hat</div>
+    <div class="site-sub">NPS Feedback Intelligence</div>
+  </div>
+
+  <!-- Tiny Golden Snitch in header -->
+  <svg width="28" height="20" viewBox="0 0 60 40" fill="none" class="snitch" style="margin-left:8px; opacity:0.7;">
+    <ellipse cx="30" cy="22" rx="9" ry="8" fill="#c9a84c" stroke="#e8c96a" stroke-width="1"/>
+    <ellipse cx="30" cy="22" rx="5" ry="4" fill="#a07020" opacity="0.6"/>
+    <circle cx="27" cy="20" r="1.5" fill="#e8c96a" opacity="0.7"/>
+    <path d="M 21 22 C 10 14 2 8 1 12 C 0 16 8 22 20 24 Z" fill="rgba(200,200,255,0.25)" stroke="rgba(201,168,76,0.5)" stroke-width="0.8"/>
+    <path d="M 39 22 C 50 14 58 8 59 12 C 60 16 52 22 40 24 Z" fill="rgba(200,200,255,0.25)" stroke="rgba(201,168,76,0.5)" stroke-width="0.8"/>
+    <ellipse cx="30" cy="22" rx="9" ry="8" fill="none" stroke="#e8c96a" stroke-width="0.6" opacity="0.6"/>
+  </svg>
+
+  <!-- Lightning bolt -->
+  <svg width="14" height="22" viewBox="0 0 20 32" class="bolt" style="margin-left:2px; opacity:0.6;">
+    <path d="M 13 0 L 3 18 L 9 18 L 7 32 L 17 13 L 11 13 Z" fill="#c9a84c"/>
+  </svg>
+
+  <div class="model-badge" id="model-indicator" style="margin-left:auto;">
+    <div class="spinner" style="width:13px;height:13px;"></div>
+    <span style="color:var(--muted);">Loading model…</span>
+  </div>
+</header>
+
+<!-- Main -->
+<div class="z1" style="max-width:780px; margin:0 auto; padding:44px 24px 80px;">
+
+  <!-- Hero -->
+  <div style="text-align:center; margin-bottom:46px;">
+
+    <!-- Hero Sorting Hat image -->
+    <div style="display:flex; justify-content:center; margin-bottom:24px;">
+      <img src="/static/sorting_hat.png" alt="Sorting Hat"
+           style="height:210px; width:auto; filter:drop-shadow(0 0 28px rgba(201,168,76,0.4));">
+    </div>
+
+    <!-- Four house color dots -->
+    <div style="display:flex; justify-content:center; gap:6px; margin-bottom:20px;">
+      <div style="width:8px;height:8px;border-radius:50%;background:#ae0001;box-shadow:0 0 6px #ae0001;" title="Gryffindor"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:#eeba30;box-shadow:0 0 6px #eeba30;" title="Hufflepuff"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:#222f5b;box-shadow:0 0 6px #4466bb;" title="Ravenclaw"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:#2a623d;box-shadow:0 0 6px #2a623d;" title="Slytherin"></div>
+    </div>
+
+    <h1 style="font-family:'Cinzel',serif; font-size:30px; font-weight:900; letter-spacing:0.04em; background:linear-gradient(135deg,#f0d870,#c9a84c,#8a6020); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px;">
+      Let the Hat decide.
+    </h1>
+    <p style="color:var(--muted); font-size:14px; max-width:400px; margin:0 auto; line-height:1.7; font-family:'IM Fell English',serif; font-style:italic;">
+      "Hmm… difficult. Upload your NPS scroll, and I shall sort every response into its rightful house."
+    </p>
+  </div>
+
+  <!-- House colour bar -->
+  <div class="house-bar"></div>
+
+  <!-- Mode Selector -->
+  <div id="mode-selector-wrap" class="card" style="margin-bottom:20px;">
+    <div class="card-title" style="margin-bottom:4px;">Select Data Source</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">What type of feedback are you classifying?</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+
+      <!-- NPS -->
+      <button class="mode-btn selected" id="mode-nps" onclick="setMode('nps')">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+          <line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+        </svg>
+        <span class="mode-name">NPS Survey</span>
+        <span class="mode-sub">Score 0–10 scale</span>
+      </button>
+
+      <!-- Android -->
+      <button class="mode-btn" id="mode-android" onclick="setMode('android')">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#78c257" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 16v-4a8 8 0 0 1 16 0v4"/><rect x="2" y="16" width="4" height="5" rx="1"/><rect x="18" y="16" width="4" height="5" rx="1"/>
+          <path d="M7 12h10"/><line x1="8" y1="5" x2="6" y2="3"/><line x1="16" y1="5" x2="18" y2="3"/>
+          <circle cx="9" cy="14" r="1" fill="#78c257"/><circle cx="15" cy="14" r="1" fill="#78c257"/>
+        </svg>
+        <span class="mode-name">Android Reviews</span>
+        <span class="mode-sub">Google Play · 1–5 ★</span>
+      </button>
+
+      <!-- iOS -->
+      <button class="mode-btn" id="mode-ios" onclick="setMode('ios')">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2"/>
+          <path d="M12 4c-1.5 0-2.5-1-2.5-1s.3 2 2.5 2 2.5-2 2.5-2-1 1-2.5 1z" fill="#60a5fa" stroke="none"/>
+          <circle cx="12" cy="17" r="1" fill="#60a5fa" stroke="none"/>
+          <line x1="9" y1="6" x2="15" y2="6"/>
+        </svg>
+        <span class="mode-name">iOS Reviews</span>
+        <span class="mode-sub">App Store · 1–5 ★</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Step wizard -->
+  <div class="steps">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="step-num active" id="s1-dot">I</div>
+      <span class="step-label active" id="s1-label">Upload</span>
+    </div>
+    <div class="step-line"></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="step-num" id="s2-dot">II</div>
+      <span class="step-label" id="s2-label">Configure</span>
+    </div>
+    <div class="step-line"></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="step-num" id="s3-dot">III</div>
+      <span class="step-label" id="s3-label">Sorting</span>
+    </div>
+    <div class="step-line"></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="step-num" id="s4-dot">IV</div>
+      <span class="step-label" id="s4-label">Results</span>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div id="error-banner" class="hidden error-box" style="margin-bottom:20px;"></div>
+
+  <!-- ── STEP 1: Upload ── -->
+  <div id="step-upload" class="card fade-in">
+    <div class="card-title">Step I — Present Your Scroll</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:22px;">Drag & drop your CSV or click to browse. Up to 50 MB.</p>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <img src="/static/sorting_hat.png" alt="Sorting Hat"
+           style="height:110px; width:auto; margin:0 auto 14px; display:block; filter:drop-shadow(0 0 14px rgba(201,168,76,0.35));">
+      <div style="font-family:'Cinzel',serif; font-size:16px; color:var(--text); margin-bottom:8px;">Drop your CSV here</div>
+      <div style="font-size:13px; color:var(--muted); margin-bottom:20px;">or click to choose a file</div>
+      <button class="btn btn-gold" onclick="event.stopPropagation(); document.getElementById('file-input').click()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Choose File
+      </button>
+      <input type="file" id="file-input" accept=".csv" class="hidden" />
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Configure ── -->
+  <div id="step-columns" class="hidden card fade-in">
+    <div class="card-title">Step II — Instruct the Hat</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Map your columns and add any special instructions.</p>
+    <div class="preview-wrap">
+      <table id="preview-table" class="preview-table"></table>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <label class="field-label" id="text-col-label">Feedback Text Column <span style="color:#ef4444;">*</span></label>
+        <select id="text-col-select"></select>
+      </div>
+      <div>
+        <label class="field-label" id="score-col-label">NPS Score Column (0–10) <span style="color:var(--muted);">(optional)</span></label>
+        <select id="score-col-select"></select>
+      </div>
+    </div>
+    <div style="margin-bottom:24px;">
+      <label class="field-label">
+        ✦ Special Instructions <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-size:10px;">— powered by Claude AI</span>
+      </label>
+      <textarea id="spec-input" placeholder="e.g. Focus on payment-related issues and flag account blocks. Highlight any fraud concerns. Prioritise problems affecting teenage users."></textarea>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px;">Claude will generate a tailored analysis after classification if filled in.</p>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-ghost" onclick="goBack()">← Back</button>
+      <button class="btn btn-gold" id="run-btn" onclick="startClassification()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Cast the Sorting Spell
+      </button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Processing ── -->
+  <div id="step-progress" class="hidden card fade-in" style="text-align:center; padding:48px 32px;">
+    <!-- Hat bobbing animation -->
+    <img src="/static/sorting_hat.png" alt="Sorting Hat" class="hat-bob"
+         style="height:156px; width:auto; margin:0 auto 20px; display:block; filter:drop-shadow(0 0 20px rgba(201,168,76,0.5));">
+
+    <div class="card-title" style="font-size:18px;margin-bottom:8px;">The Hat is deliberating…</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:32px;font-family:'IM Fell English',serif;font-style:italic;">"A tricky one… give me a moment."</p>
+    <div class="progress-track" style="margin-bottom:10px;">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);">
+      <span id="progress-text">Preparing the ceremony…</span>
+      <span id="progress-pct">0%</span>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Results ── -->
+  <div id="step-results" class="hidden fade-in">
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+      <div class="stat-card">
+        <div class="stat-label" style="color:var(--muted);">Total</div>
+        <div class="stat-value" style="color:var(--text);" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" style="color:#a5b4fc;">Actionable</div>
+        <div class="stat-value" style="color:#a5b4fc;" id="stat-actionable">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" style="color:#6ee7b7;">Sentiment</div>
+        <div class="stat-value" style="color:#6ee7b7;" id="stat-sentiment">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" style="color:var(--gold-light);">Noise / NULL</div>
+        <div class="stat-value" style="color:var(--gold-light);" id="stat-noise">—</div>
+      </div>
+    </div>
+
+    <!-- Category breakdown -->
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title" style="margin-bottom:18px;">Category Breakdown</div>
+      <div style="margin-bottom:18px;">
+        <div style="margin-bottom:10px;"><span class="section-tag tag-actionable">⚡ Actionable Issues</span></div>
+        <div id="cats-actionable"></div>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:18px;">
+        <div style="margin-bottom:10px;"><span class="section-tag tag-sentiment">✦ Sentiment</span></div>
+        <div id="cats-sentiment"></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div style="margin-bottom:10px;"><span class="section-tag tag-noise">◌ Noise</span></div>
+        <div id="cats-noise"></div>
+      </div>
+    </div>
+
+    <!-- AI insights -->
+    <div id="ai-section" class="hidden" style="margin-bottom:14px;">
+      <div class="ai-card">
+        <div class="ai-title">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8" stroke="#c4a0f0" stroke-width="1.5"/>
+            <path d="M 7 7 Q 10 4 13 7 Q 16 10 13 13 Q 10 16 7 13 Q 4 10 7 7 Z" fill="rgba(196,160,240,0.2)" stroke="#c4a0f0" stroke-width="1"/>
+            <circle cx="10" cy="10" r="2" fill="#c4a0f0"/>
+          </svg>
+          Claude's Analysis
+          <div class="spinner spinner-purple hidden" id="ai-spinner" style="margin-left:auto;"></div>
+        </div>
+        <div id="ai-body" class="ai-body" style="color:var(--muted);font-style:italic;">Consulting the oracle…</div>
+      </div>
+    </div>
+
+    <!-- Download -->
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:16px; background:linear-gradient(135deg,rgba(201,168,76,0.07),rgba(201,168,76,0.02));">
+      <div>
+        <div style="font-family:'Cinzel',serif;font-size:14px;color:var(--gold-light);margin-bottom:4px;">The sorting is complete.</div>
+        <div style="font-size:12px;color:var(--muted);">Classified CSV, sorted by priority. Actionable issues first.</div>
+      </div>
+      <a id="download-link" href="#" class="btn btn-green" style="white-space:nowrap;">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download CSV
+      </a>
+    </div>
+
+    <button onclick="resetAll()" style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;" onmouseover="this.style.color='#c4bba8'" onmouseout="this.style.color='var(--muted)'">
+      ← Sort another file
+    </button>
+  </div>
+
+</div>
+
+<script>
+  // ── Starfield ──────────────────────────────────────────────────────────────
+  (function buildStars() {
+    const sf = document.getElementById("starfield");
+    for (let i = 0; i < 120; i++) {
+      const s = document.createElement("div");
+      s.className = "star";
+      const size = Math.random() * 2 + 0.5;
+      s.style.cssText = `
+        left:${Math.random()*100}%;top:${Math.random()*100}%;
+        width:${size}px;height:${size}px;
+        animation-duration:${2+Math.random()*4}s;
+        animation-delay:${Math.random()*4}s;
+      `;
+      sf.appendChild(s);
+    }
+  })();
+
+  // ── Sparkles ───────────────────────────────────────────────────────────────
+  (function spawnSparkles() {
+    const container = document.getElementById("sparkles");
+    setInterval(() => {
+      const sp = document.createElement("div");
+      sp.className = "sparkle";
+      sp.style.cssText = `
+        left:${10+Math.random()*80}%;
+        bottom:${Math.random()*30}%;
+        animation-duration:${3+Math.random()*4}s;
+        animation-delay:${Math.random()*2}s;
+        width:${2+Math.random()*3}px; height:${2+Math.random()*3}px;
+      `;
+      container.appendChild(sp);
+      setTimeout(() => sp.remove(), 8000);
+    }, 600);
+  })();
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let uploadedFile = null, currentJobId = null, pollTimer = null;
+  let currentMode = 'nps';
+  const NOISE_CATS = new Set(["GIBBERISH","EMPTY","NON_ENGLISH","NULL"]);
+  const META_CATS  = new Set(["POSITIVE_FEEDBACK","INCONCLUSIVE"]);
+
+  // ── Mode selection ─────────────────────────────────────────────────────────
+  function setMode(mode) {
+    if (currentMode === mode) return;
+    currentMode = mode;
+    ['nps', 'android', 'ios'].forEach(m =>
+      document.getElementById('mode-' + m).classList.toggle('selected', m === mode)
+    );
+    updateModeLabels();
+    if (uploadedFile) { goBack(); }
+  }
+
+  function updateModeLabels() {
+    const isNps = currentMode === 'nps';
+    const textLbl   = document.getElementById('text-col-label');
+    const scoreLbl  = document.getElementById('score-col-label');
+    const specInput = document.getElementById('spec-input');
+    textLbl.innerHTML  = isNps
+      ? 'Feedback Text Column <span style="color:#ef4444;">*</span>'
+      : 'Review Text Column <span style="color:#ef4444;">*</span>';
+    scoreLbl.innerHTML = isNps
+      ? 'NPS Score Column (0–10) <span style="color:var(--muted);">(optional)</span>'
+      : 'Star Rating Column (1–5 ★) <span style="color:var(--muted);">(optional)</span>';
+    specInput.placeholder = isNps
+      ? 'e.g. Focus on payment-related issues and flag account blocks. Highlight any fraud concerns. Prioritise problems affecting teenage users.'
+      : currentMode === 'android'
+        ? 'e.g. Focus on Android-specific crashes, Google Pay issues, or app update complaints. Flag data sync problems.'
+        : 'e.g. Focus on iOS-specific issues, App Store rating drops, and any Touch ID / Face ID problems.';
+  }
+
+  // ── Model status ───────────────────────────────────────────────────────────
+  function checkModel() {
+    fetch("/model-status").then(r => r.json()).then(d => {
+      const el = document.getElementById("model-indicator");
+      if (d.error) {
+        el.innerHTML = `<span style="color:#fca5a5;">⚠ ${d.error}</span>`;
+      } else if (d.ready) {
+        el.innerHTML = `<span style="color:#6ee7b7;font-size:15px;">✦</span><span style="color:#6ee7b7;">Model ready</span>`;
+      } else {
+        setTimeout(checkModel, 2000);
+      }
+    }).catch(() => setTimeout(checkModel, 3000));
+  }
+  checkModel();
+
+  // ── Drag & drop ────────────────────────────────────────────────────────────
+  const dropZone = document.getElementById("drop-zone");
+  const fileInput = document.getElementById("file-input");
+  dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0]; if (f) handleFile(f);
+  });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  // ── File handling ──────────────────────────────────────────────────────────
+  function handleFile(file) {
+    if (!file.name.endsWith(".csv")) { showError("Please upload a CSV file."); return; }
+    uploadedFile = file; clearError();
+    const fd = new FormData(); fd.append("file", file);
+    fetch("/columns", { method: "POST", body: fd }).then(r => r.json()).then(d => {
+      if (d.error) { showError(d.error); return; }
+      buildColumnUI(d.columns, d.preview); showStep(2);
+    }).catch(e => showError("Failed to read file: " + e));
+  }
+
+  function buildColumnUI(cols, preview) {
+    const tbl = document.getElementById("preview-table");
+    const head = cols.map(c => `<th>${c}</th>`).join("");
+    const rows = preview.map(row => `<tr>${cols.map(c => `<td title="${row[c]??''}">${row[c]??''}</td>`).join("")}</tr>`).join("");
+    tbl.innerHTML = `<thead><tr>${head}</tr></thead><tbody>${rows}</tbody>`;
+    const ts = document.getElementById("text-col-select");
+    const ss = document.getElementById("score-col-select");
+    ts.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join("");
+    ss.innerHTML = `<option value="">(none)</option>` + cols.map(c => `<option value="${c}">${c}</option>`).join("");
+    const lt = cols.find(c => /comment|feedback|text|response|reason|review|content/i.test(c)) || cols[0];
+    const ls = currentMode === 'nps'
+      ? cols.find(c => /score|nps|rating|rank/i.test(c))
+      : cols.find(c => /rating|stars?|score/i.test(c));
+    ts.value = lt; if (ls) ss.value = ls;
+  }
+
+  // ── Classification ─────────────────────────────────────────────────────────
+  function startClassification() {
+    const textCol = document.getElementById("text-col-select").value;
+    const scoreCol = document.getElementById("score-col-select").value;
+    const spec = document.getElementById("spec-input").value.trim();
+    if (!textCol) { showError("Please select a text column."); return; }
+    clearError(); showStep(3);
+    const fd = new FormData();
+    fd.append("file", uploadedFile); fd.append("text_col", textCol);
+    fd.append("score_col", scoreCol); fd.append("spec", spec);
+    fd.append("source_type", currentMode);
+    fetch("/classify", { method: "POST", body: fd }).then(r => r.json()).then(d => {
+      if (d.error) { showError(d.error); showStep(2); return; }
+      currentJobId = d.job_id; pollStatus();
+    }).catch(e => { showError("Upload failed: " + e); showStep(2); });
+  }
+
+  function pollStatus() {
+    fetch(`/status/${currentJobId}`).then(r => r.json()).then(d => {
+      if (d.error) { showError(d.error); showStep(2); return; }
+      const pct = d.total > 0 ? Math.round((d.progress / d.total) * 100) : 0;
+      document.getElementById("progress-fill").style.width = pct + "%";
+      document.getElementById("progress-pct").textContent  = pct + "%";
+      document.getElementById("progress-text").textContent =
+        d.total > 0 ? `${d.progress.toLocaleString()} / ${d.total.toLocaleString()} responses sorted` : "Preparing the ceremony…";
+      if (d.status === "done") { showResults(d); }
+      else if (d.status === "error") { showError(d.error || "Sorting failed."); showStep(2); }
+      else { pollTimer = setTimeout(pollStatus, 1200); }
+    }).catch(() => { pollTimer = setTimeout(pollStatus, 2000); });
+  }
+
+  // ── Results ────────────────────────────────────────────────────────────────
+  function showResults(job) {
+    const s = job.summary;
+    document.getElementById("stat-total").textContent     = s.total.toLocaleString();
+    document.getElementById("stat-actionable").textContent = s.actionable.toLocaleString();
+    document.getElementById("stat-sentiment").textContent  = s.sentiment.toLocaleString();
+    document.getElementById("stat-noise").textContent     = (s.noise + s.null).toLocaleString();
+
+    const cats = s.categories, maxVal = Math.max(...Object.values(cats), 1);
+    function render(id, fn, color) {
+      const el = document.getElementById(id); el.innerHTML = "";
+      const entries = Object.entries(cats).filter(([k]) => fn(k)).sort((a,b) => b[1]-a[1]);
+      if (!entries.length) { el.innerHTML = `<p style="font-size:12px;color:var(--muted);">None</p>`; return; }
+      entries.forEach(([cat, count]) => {
+        const pct = Math.round((count / maxVal) * 100);
+        el.innerHTML += `<div class="cat-bar"><span class="cat-name" title="${cat.replace(/_/g,' ')}">${cat.replace(/_/g,' ')}</span><div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div><span class="cat-count">${count}</span></div>`;
+      });
+    }
+    render("cats-actionable", k => !NOISE_CATS.has(k) && !META_CATS.has(k), "#6366f1");
+    render("cats-sentiment",  k => META_CATS.has(k),  "#10b981");
+    render("cats-noise",      k => NOISE_CATS.has(k), "#c9a84c");
+
+    document.getElementById("download-link").href = `/download/${currentJobId}`;
+
+    if (job.ai_status && job.ai_status !== "none") {
+      document.getElementById("ai-section").classList.remove("hidden");
+      handleAiStatus(job);
+    }
+    showStep(4);
+  }
+
+  function handleAiStatus(job) {
+    const spinner = document.getElementById("ai-spinner");
+    const body    = document.getElementById("ai-body");
+    if (job.ai_status === "done") {
+      spinner.classList.add("hidden");
+      body.style.fontStyle = "normal"; body.style.color = "#c8bedd";
+      body.textContent = job.ai_insights;
+    } else if (job.ai_status === "error") {
+      spinner.classList.add("hidden");
+      body.style.color = "#fca5a5"; body.style.fontStyle = "normal";
+      body.textContent = "⚠ " + (job.ai_error || "AI analysis failed.");
+    } else {
+      spinner.classList.remove("hidden");
+      body.textContent = "Claude is consulting the stars…";
+      setTimeout(() => { fetch(`/status/${currentJobId}`).then(r => r.json()).then(d => handleAiStatus(d)); }, 2000);
+    }
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  const STEPS = ["step-upload","step-columns","step-progress","step-results"];
+  const ROMAN  = ["I","II","III","IV"];
+  function showStep(n) {
+    STEPS.forEach((id, i) => document.getElementById(id).classList.toggle("hidden", i+1 !== n));
+    document.getElementById("mode-selector-wrap").classList.toggle("hidden", n > 2);
+    for (let i = 1; i <= 4; i++) {
+      const dot = document.getElementById(`s${i}-dot`), lbl = document.getElementById(`s${i}-label`);
+      dot.classList.remove("active","done"); lbl.classList.remove("active");
+      if (i < n)       { dot.classList.add("done"); dot.textContent = "✓"; }
+      else if (i === n) { dot.classList.add("active"); dot.textContent = ROMAN[i-1]; lbl.classList.add("active"); }
+      else              { dot.textContent = ROMAN[i-1]; }
+    }
+  }
+  function goBack() { if (pollTimer) clearTimeout(pollTimer); showStep(1); uploadedFile = null; fileInput.value = ""; clearError(); }
+  function resetAll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    uploadedFile = null; currentJobId = null; fileInput.value = "";
+    document.getElementById("progress-fill").style.width = "0%";
+    document.getElementById("spec-input").value = "";
+    document.getElementById("ai-section").classList.add("hidden");
+    document.getElementById("mode-selector-wrap").classList.remove("hidden");
+    showStep(1); clearError();
+  }
+  function showError(msg) { const el = document.getElementById("error-banner"); el.textContent = "⚠ " + msg; el.classList.remove("hidden"); }
+  function clearError() { document.getElementById("error-banner").classList.add("hidden"); }
+</script>
+</body>
+</html>
