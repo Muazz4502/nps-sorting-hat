@@ -1,0 +1,6 @@
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install torch --index-url https://download.pytorch.org/whl/cpu",
+  "pip install flask pandas numpy scikit-learn sentence-transformers httpx anthropic gunicorn"
+]
