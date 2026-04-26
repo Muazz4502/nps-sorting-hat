@@ -1,11 +1,10 @@
 """
 NPS Feedback Categorization Pipeline
 =====================================
-High-precision classifier for FamApp NPS survey responses.
+High-precision classifier for fintech-app NPS survey responses.
 Prioritizes precision over recall — returns NULL when not confident.
 
 Author: ML Pipeline
-Product: FamApp (fintech for teenagers in India)
 """
 
 import ssl
@@ -231,7 +230,7 @@ CATEGORY_MAP = {
     "Finding Transaction History ":             "PROFILE_AND_ACCOUNT_MANAGEMENT",
     "Finding Transaction History":              "PROFILE_AND_ACCOUNT_MANAGEMENT",
     "Option to hide transactions from history": "PROFILE_AND_ACCOUNT_MANAGEMENT",
-    "Access FamApp from Laptop":                "PROFILE_AND_ACCOUNT_MANAGEMENT",
+    "Access app from Laptop":                   "PROFILE_AND_ACCOUNT_MANAGEMENT",
     "Custom VPA Issues":                        "PROFILE_AND_ACCOUNT_MANAGEMENT",
     "Spend Analytics":                          "PROFILE_AND_ACCOUNT_MANAGEMENT",
     "DM Experience":                            "PROFILE_AND_ACCOUNT_MANAGEMENT",
@@ -429,7 +428,8 @@ POSITIVE_WORDS = {
     "friendly", "clean", "clear", "intuitive", "beautiful", "attractive",
     "works", "working", "well", "fine", "okay", "ok",
     "really", "very", "so", "too", "much", "more", "most",
-    "app", "application", "fam", "famapp", "fampay", "it", "its", "this", "the",
+    # NOTE: add your product/brand names to this list — they're stopwords for classification
+    "app", "application", "it", "its", "this", "the",
     "is", "are", "was", "be", "been", "for", "to", "of", "and", "a", "an",
     "i", "my", "me", "use", "using", "used",
     # App-identity / audience words — not complaints
@@ -753,9 +753,10 @@ KEYWORD_OVERRIDES: list[tuple] = [
     (re.compile(r'\b(refund|wapas|money\s*back|return\s*money)\b', re.I),
      "STUCK_TRANSACTIONS_AND_REFUNDS"),
     # Account blocked
-    (re.compile(r'\b(account|fampay)\s*(blocked|suspended|freeze|band|locked)\b', re.I),
+    # NOTE: add brand/product names alongside "account" if users refer to it by name in feedback
+    (re.compile(r'\b(account|wallet)\s*(blocked|suspended|freeze|band|locked)\b', re.I),
      "ACCOUNT_BLOCKED"),
-    (re.compile(r'\b(blocked|suspended|freeze|locked)\s*(account|fampay)\b', re.I),
+    (re.compile(r'\b(blocked|suspended|freeze|locked)\s*(account|wallet)\b', re.I),
      "ACCOUNT_BLOCKED"),
     # QR code
     (re.compile(r'\b(qr|scanner|qr\s*code)\b', re.I), "QR_CODE_ISSUES"),

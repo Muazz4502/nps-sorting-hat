@@ -184,7 +184,7 @@ def _run_ai_insights(job_id: str, summary: dict, spec: str, source_type: str = "
             f"  - {k}: {v}" for k, v in summary["categories"].items()
         )
         source_label = {"nps": "NPS survey", "android": "Android (Google Play) app review", "ios": "iOS (App Store) app review"}.get(source_type, "NPS survey")
-        prompt = f"""You are an expert analyst for FamApp, a fintech app for teenagers in India.
+        prompt = f"""You are an expert analyst for a fintech app for teenagers in India.
 
 A batch of {summary['total']} {source_label} responses was classified into these categories:
 
